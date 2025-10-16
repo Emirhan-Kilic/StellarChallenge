@@ -10,8 +10,6 @@
 ![Soroban](https://img.shields.io/badge/Soroban-Smart_Contracts-FF6B35?style=for-the-badge)
 ![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js)
 
-[🚀 Live Demo](http://localhost:3000) • [📖 Documentation](#-how-it-works) • [🎬 Video Demo](#) • [🔗 Smart Contract](https://stellar.expert/explorer/testnet/contract/CCT7MMUOIM46ABX6FXSIYNJSHLI4CBF2RZ2MSVZM6YXLS4PABU6SPNPE)
-
 </div>
 
 ---
