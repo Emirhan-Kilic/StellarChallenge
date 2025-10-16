@@ -137,7 +137,9 @@ export async function getOwnerOf(tokenId: number): Promise<string | null> {
     
     if (StellarSdk.rpc.Api.isSimulationSuccess(simulation) && simulation.result) {
       const scVal = simulation.result.retval;
-      return StellarSdk.StrKey.encodeEd25519PublicKey(scVal.address().accountId().ed25519());
+      // Convert ScVal address to native string
+      const nativeValue = StellarSdk.scValToNative(scVal);
+      return nativeValue;
     }
     
     return null;
@@ -172,7 +174,9 @@ export async function getPrice(tokenId: number): Promise<string | null> {
     
     if (StellarSdk.rpc.Api.isSimulationSuccess(simulation) && simulation.result) {
       const scVal = simulation.result.retval;
-      return scVal.u128().toString();
+      // Convert ScVal to native JavaScript value
+      const nativeValue = StellarSdk.scValToNative(scVal);
+      return nativeValue.toString();
     }
     
     return "0";
@@ -202,7 +206,9 @@ export async function getNextTokenId(): Promise<number> {
     
     if (StellarSdk.rpc.Api.isSimulationSuccess(simulation) && simulation.result) {
       const scVal = simulation.result.retval;
-      return scVal.u32();
+      // Convert ScVal to native JavaScript value
+      const nativeValue = StellarSdk.scValToNative(scVal);
+      return Number(nativeValue);
     }
     
     return 0;
