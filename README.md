@@ -3,6 +3,7 @@
 # ⚡ StellarSkip
 
 ### *Stop Wasting Time. Start Trading It.*
+### *Made For Fullstack Challenge*
 
 **The first decentralized marketplace for physical queue positions**
 
