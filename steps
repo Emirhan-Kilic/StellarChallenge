@@ -1,0 +1,14 @@
+# 1. Complete reset with demo data
+cd /home/lkilic/StellarChallenge
+./reset_queue.sh
+# Answer 'y' when prompted for demo data
+
+# 2. Verify everything
+./queue_utils.sh status
+./queue_utils.sh list
+
+# 3. Start frontend (it's already configured!)
+cd frontend
+npm run dev
+
+# 4. Open http://localhost:3000 and demo!
