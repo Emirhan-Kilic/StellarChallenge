@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { getQueueData, buildListForSaleTx, submitTransaction } from "@/lib/stellar";
+import { getUserToken, buildListForSaleTx, submitTransaction } from "@/lib/stellar";
 import { signTx } from "@/lib/freighter";
 
 interface MyTokenProps {
@@ -28,9 +28,8 @@ export default function MyToken({ userAddress, onUpdate }: MyTokenProps) {
 
   async function loadMyToken() {
     setLoading(true);
-    const tokens = await getQueueData();
-    const mine = tokens.find((t) => t.owner === userAddress);
-    setMyToken(mine || null);
+    const myToken = await getUserToken(userAddress);
+    setMyToken(myToken);
     setLoading(false);
   }
 

@@ -229,18 +229,25 @@ export interface QueueToken {
 export async function getQueueData(): Promise<QueueToken[]> {
   try {
     const totalTokens = await getNextTokenId();
-    const tokens: QueueToken[] = [];
     
+    // Fetch all owners and prices in parallel
+    const ownerPromises = Array.from({ length: totalTokens }, (_, i) => getOwnerOf(i));
+    const pricePromises = Array.from({ length: totalTokens }, (_, i) => getPrice(i));
+    
+    const [owners, prices] = await Promise.all([
+      Promise.all(ownerPromises),
+      Promise.all(pricePromises)
+    ]);
+    
+    // Build tokens array
+    const tokens: QueueToken[] = [];
     for (let i = 0; i < totalTokens; i++) {
-      const owner = await getOwnerOf(i);
-      const price = await getPrice(i);
-      
-      if (owner) {
+      if (owners[i]) {
         tokens.push({
           tokenId: i,
-          owner,
-          price: price || "0",
-          isForSale: price !== "0" && price !== null,
+          owner: owners[i]!,
+          price: prices[i] || "0",
+          isForSale: prices[i] !== "0" && prices[i] !== null,
         });
       }
     }
@@ -249,6 +256,41 @@ export async function getQueueData(): Promise<QueueToken[]> {
   } catch (err) {
     console.error("Error getting queue data:", err);
     return [];
+  }
+}
+
+// Optimized: Find user's token without fetching entire queue
+export async function getUserToken(userAddress: string): Promise<QueueToken | null> {
+  try {
+    const totalTokens = await getNextTokenId();
+    
+    // Check tokens in parallel batches to avoid overwhelming RPC
+    const batchSize = 10;
+    for (let start = 0; start < totalTokens; start += batchSize) {
+      const end = Math.min(start + batchSize, totalTokens);
+      const batch = Array.from({ length: end - start }, (_, i) => start + i);
+      
+      const owners = await Promise.all(batch.map(i => getOwnerOf(i)));
+      
+      // Check if user owns any token in this batch
+      const userTokenIndex = owners.findIndex(owner => owner === userAddress);
+      if (userTokenIndex !== -1) {
+        const tokenId = start + userTokenIndex;
+        const price = await getPrice(tokenId);
+        
+        return {
+          tokenId,
+          owner: userAddress,
+          price: price || "0",
+          isForSale: price !== "0" && price !== null,
+        };
+      }
+    }
+    
+    return null;
+  } catch (err) {
+    console.error("Error getting user token:", err);
+    return null;
   }
 }
 
