@@ -83,6 +83,38 @@ impl QueueContract {
         );
     }
 
+    /// Cancel sale - remove token from marketplace
+    pub fn cancel_sale(env: Env, token_id: u32) {
+        // Get current owner
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Owner(token_id))
+            .expect("Token does not exist");
+        
+        // Verify caller owns the token
+        owner.require_auth();
+        
+        // Check if token is actually for sale
+        let is_for_sale = env
+            .storage()
+            .instance()
+            .has(&DataKey::Price(token_id));
+        
+        if !is_for_sale {
+            panic!("Token is not for sale");
+        }
+        
+        // Remove price (unlist from sale)
+        env.storage().instance().remove(&DataKey::Price(token_id));
+        
+        // Emit event
+        env.events().publish(
+            (Symbol::new(&env, "cancelled"), token_id),
+            owner.clone()
+        );
+    }
+
     /// Buy a token - performs atomic swap of XLM for NFT
     pub fn buy_token(env: Env, token_id: u32, buyer: Address, xlm_token: Address) {
         // Verify buyer authorization

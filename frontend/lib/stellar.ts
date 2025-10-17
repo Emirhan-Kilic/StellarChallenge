@@ -1,7 +1,7 @@
 import * as StellarSdk from "@stellar/stellar-sdk";
 
 // Contract deployed on Testnet
-export const CONTRACT_ID = "CAWE4YAL474UU4UKBKJPLFTLZLNBFIEILKEDKJPHF7JPRQ5OT7UG4NAM";
+export const CONTRACT_ID = "CDGKGEEKUSPNFBMC5MHKLDEJ67I5UMUAAOA5CYDOKLCWAM3NDSSCQ2EG";
 export const NETWORK_PASSPHRASE = StellarSdk.Networks.TESTNET;
 export const RPC_URL = "https://soroban-testnet.stellar.org:443";
 
@@ -63,6 +63,31 @@ export async function buildListForSaleTx(
         "list_for_sale",
         StellarSdk.nativeToScVal(tokenId, { type: "u32" }),
         StellarSdk.nativeToScVal(priceBigInt, { type: "u128" })
+      )
+    )
+    .setTimeout(300)
+    .build();
+
+  const prepared = await server.prepareTransaction(tx);
+  return prepared.toXDR();
+}
+
+// Build transaction for canceling token sale
+export async function buildCancelSaleTx(
+  userAddress: string,
+  tokenId: number
+): Promise<string> {
+  const account = await server.getAccount(userAddress);
+  const contract = new StellarSdk.Contract(CONTRACT_ID);
+  
+  const tx = new StellarSdk.TransactionBuilder(account, {
+    fee: StellarSdk.BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        "cancel_sale",
+        StellarSdk.nativeToScVal(tokenId, { type: "u32" })
       )
     )
     .setTimeout(300)

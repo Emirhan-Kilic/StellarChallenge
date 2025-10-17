@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { getUserTokens, buildListForSaleTx, submitTransaction, QueueToken } from "@/lib/stellar";
+import { getUserTokens, buildListForSaleTx, buildCancelSaleTx, submitTransaction, QueueToken } from "@/lib/stellar";
 import { signTx } from "@/lib/freighter";
 
 interface MyTokenProps {
@@ -14,6 +14,7 @@ export default function MyToken({ userAddress, onUpdate }: MyTokenProps) {
   const [myTokens, setMyTokens] = useState<QueueToken[]>([]);
   const [loading, setLoading] = useState(true);
   const [listing, setListing] = useState<number | null>(null);
+  const [canceling, setCanceling] = useState<number | null>(null);
   const [prices, setPrices] = useState<Record<number, string>>({});
 
   useEffect(() => {
@@ -66,6 +67,37 @@ export default function MyToken({ userAddress, onUpdate }: MyTokenProps) {
       alert("Failed to list token: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setListing(null);
+    }
+  }
+
+  async function handleCancelSale(tokenId: number) {
+    setCanceling(tokenId);
+    try {
+      // Build transaction
+      const txXdr = await buildCancelSaleTx(userAddress, tokenId);
+      
+      // Sign with Freighter
+      const signedXdr = await signTx(txXdr, userAddress);
+      if (!signedXdr) {
+        alert("Failed to sign transaction");
+        return;
+      }
+
+      // Submit transaction
+      const result = await submitTransaction(signedXdr);
+      
+      if (result.status === "SUCCESS") {
+        alert(`Token #${tokenId} sale canceled successfully!`);
+        await loadMyTokens();
+        onUpdate?.();
+      } else {
+        alert("Transaction failed: " + result.status);
+      }
+    } catch (err) {
+      console.error("Cancel error:", err);
+      alert("Failed to cancel sale: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setCanceling(null);
     }
   }
 
@@ -148,9 +180,16 @@ export default function MyToken({ userAddress, onUpdate }: MyTokenProps) {
                 <h4 className="font-semibold text-green-900 mb-2 text-sm">
                   ✓ Currently Listed
                 </h4>
-                <p className="text-green-700 text-sm">
-                  This token is already listed for {(parseInt(token.price) / 10000000).toFixed(2)} XLM
+                <p className="text-green-700 text-sm mb-3">
+                  This token is listed for {(parseInt(token.price) / 10000000).toFixed(2)} XLM
                 </p>
+                <button
+                  onClick={() => handleCancelSale(token.tokenId)}
+                  disabled={canceling === token.tokenId}
+                  className="w-full px-4 py-2 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {canceling === token.tokenId ? "Canceling..." : "Cancel Sale"}
+                </button>
               </div>
             )}
 
