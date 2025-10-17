@@ -1,7 +1,7 @@
 import * as StellarSdk from "@stellar/stellar-sdk";
 
 // Contract deployed on Testnet
-export const CONTRACT_ID = "CDBVVTV2G2C4BLME3YJYIXWVKGA3NYDSXMLDM45W2YWDCKBUCVENZAQD";
+export const CONTRACT_ID = "CBIVIESKQDUJTUCRF2KRCIVR7XFNAAGMNJXSND3MFPYEGC4MTEEFISHB";
 export const NETWORK_PASSPHRASE = StellarSdk.Networks.TESTNET;
 export const RPC_URL = "https://soroban-testnet.stellar.org:443";
 

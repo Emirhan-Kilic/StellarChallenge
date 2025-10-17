@@ -238,8 +238,6 @@ stellar contract deploy --wasm target/wasm32v1-none/release/hello_world.wasm --s
 cd frontend && npm run dev
 ```
 
-**📚 [Full Setup Guide](#-detailed-setup)**
-
 ---
 
 ## 🎯 For Hackathon Judges
@@ -313,34 +311,6 @@ cd StellarChallenge
 
 ---
 
-## 📁 Project Structure
-
-```
-StellarChallenge/
-├── contract/queue-contract/     # Soroban smart contract
-│   ├── src/lib.rs              # Core contract logic
-│   ├── src/test.rs             # Unit tests
-│   └── target/                 # Compiled WASM
-│
-├── frontend/                    # Next.js application
-│   ├── app/page.tsx            # Main dashboard
-│   ├── components/             # React components
-│   │   ├── WalletConnect.tsx   # Wallet integration
-│   │   ├── QueueList.tsx       # Live queue display
-│   │   ├── MyToken.tsx         # User's token & QR
-│   │   └── Verifier.tsx        # QR scanner
-│   └── lib/                    # Utilities
-│       ├── stellar.ts          # Contract interaction
-│       └── freighter.ts        # Wallet integration
-│
-├── setup_demo.sh               # Demo data setup
-├── reset_queue.sh              # Deploy fresh contract
-├── queue_utils.sh              # Management utilities
-└── README.md                   # You are here!
-```
-
----
-
 ## 🔐 Security & Trust
 
 ### Blockchain Guarantees
@@ -377,8 +347,8 @@ StellarChallenge/
 <td width="33%">
 
 ### 🚀 Phase 2: Scale
-- [ ] Multiple queues
-- [ ] Real-time notifications
+- [x] Multiple queues
+- [x] Real-time notifications
 - [ ] Mobile app
 - [ ] Venue integrations
 
@@ -477,20 +447,6 @@ We welcome contributions! This is an open-source hackathon project.
 - 📊 Analytics dashboard
 
 ---
-
-## 📞 Support & Resources
-
-### Documentation
-
-- 📚 [Stellar Docs](https://developers.stellar.org/)
-- 🔗 [Soroban Guide](https://soroban.stellar.org/)
-- 💼 [Freighter API](https://docs.freighter.app/)
-
-### Deployed Contract
-
-- 🔍 **Contract ID**: `CCT7MMUOIM46ABX6FXSIYNJSHLI4CBF2RZ2MSVZM6YXLS4PABU6SPNPE`
-- 🌐 **Network**: Stellar Testnet
-- 📊 **Explorer**: [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CCT7MMUOIM46ABX6FXSIYNJSHLI4CBF2RZ2MSVZM6YXLS4PABU6SPNPE)
 
 ### Quick Commands
 
