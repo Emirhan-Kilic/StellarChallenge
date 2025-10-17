@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { getUserTokens, buildListForSaleTx, buildCancelSaleTx, submitTransaction, QueueToken } from "@/lib/stellar";
+import { getUserTokens, getAllQueues, buildListForSaleTx, buildCancelSaleTx, submitTransaction, QueueToken, QueueInfo } from "@/lib/stellar";
 import { signTx } from "@/lib/freighter";
 
 interface MyTokenProps {
@@ -12,10 +12,11 @@ interface MyTokenProps {
 
 export default function MyToken({ userAddress, onUpdate }: MyTokenProps) {
   const [myTokens, setMyTokens] = useState<QueueToken[]>([]);
+  const [queues, setQueues] = useState<QueueInfo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [listing, setListing] = useState<number | null>(null);
-  const [canceling, setCanceling] = useState<number | null>(null);
-  const [prices, setPrices] = useState<Record<number, string>>({});
+  const [listing, setListing] = useState<string | null>(null); // "queueId-tokenId"
+  const [canceling, setCanceling] = useState<string | null>(null); // "queueId-tokenId"
+  const [prices, setPrices] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadMyTokens();
@@ -24,25 +25,34 @@ export default function MyToken({ userAddress, onUpdate }: MyTokenProps) {
 
   async function loadMyTokens() {
     setLoading(true);
-    const tokens = await getUserTokens(userAddress);
+    const [tokens, allQueues] = await Promise.all([
+      getUserTokens(userAddress),
+      getAllQueues()
+    ]);
     setMyTokens(tokens);
+    setQueues(allQueues);
     setLoading(false);
   }
 
-  async function handleListForSale(tokenId: number) {
-    const price = prices[tokenId];
+  function getTokenKey(queueId: number, tokenId: number): string {
+    return `${queueId}-${tokenId}`;
+  }
+
+  async function handleListForSale(queueId: number, tokenId: number) {
+    const key = getTokenKey(queueId, tokenId);
+    const price = prices[key];
     if (!price || parseFloat(price) <= 0) {
       alert("Please enter a valid price");
       return;
     }
 
-    setListing(tokenId);
+    setListing(key);
     try {
       // Convert XLM to stroops (1 XLM = 10,000,000 stroops)
       const priceInStroops = Math.floor(parseFloat(price) * 10000000).toString();
       
       // Build transaction
-      const txXdr = await buildListForSaleTx(userAddress, tokenId, priceInStroops);
+      const txXdr = await buildListForSaleTx(userAddress, queueId, tokenId, priceInStroops);
       
       // Sign with Freighter
       const signedXdr = await signTx(txXdr, userAddress);
@@ -55,8 +65,8 @@ export default function MyToken({ userAddress, onUpdate }: MyTokenProps) {
       const result = await submitTransaction(signedXdr);
       
       if (result.status === "SUCCESS") {
-        alert(`Token #${tokenId} listed successfully!`);
-        setPrices(prev => ({ ...prev, [tokenId]: "" }));
+        alert(`Token #${tokenId} in queue #${queueId} listed successfully!`);
+        setPrices(prev => ({ ...prev, [key]: "" }));
         await loadMyTokens();
         onUpdate?.();
       } else {
@@ -70,11 +80,12 @@ export default function MyToken({ userAddress, onUpdate }: MyTokenProps) {
     }
   }
 
-  async function handleCancelSale(tokenId: number) {
-    setCanceling(tokenId);
+  async function handleCancelSale(queueId: number, tokenId: number) {
+    const key = getTokenKey(queueId, tokenId);
+    setCanceling(key);
     try {
       // Build transaction
-      const txXdr = await buildCancelSaleTx(userAddress, tokenId);
+      const txXdr = await buildCancelSaleTx(userAddress, queueId, tokenId);
       
       // Sign with Freighter
       const signedXdr = await signTx(txXdr, userAddress);
@@ -87,7 +98,7 @@ export default function MyToken({ userAddress, onUpdate }: MyTokenProps) {
       const result = await submitTransaction(signedXdr);
       
       if (result.status === "SUCCESS") {
-        alert(`Token #${tokenId} sale canceled successfully!`);
+        alert(`Token #${tokenId} in queue #${queueId} sale canceled successfully!`);
         await loadMyTokens();
         onUpdate?.();
       } else {
@@ -101,8 +112,13 @@ export default function MyToken({ userAddress, onUpdate }: MyTokenProps) {
     }
   }
 
-  function updatePrice(tokenId: number, value: string) {
-    setPrices(prev => ({ ...prev, [tokenId]: value }));
+  function updatePrice(queueId: number, tokenId: number, value: string) {
+    const key = getTokenKey(queueId, tokenId);
+    setPrices(prev => ({ ...prev, [key]: value }));
+  }
+
+  function getQueueName(queueId: number): string {
+    return queues.find(q => q.queueId === queueId)?.name || `Queue #${queueId}`;
   }
 
   if (loading) {
@@ -128,78 +144,88 @@ export default function MyToken({ userAddress, onUpdate }: MyTokenProps) {
       </h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {myTokens.map((token) => (
-          <div
-            key={token.tokenId}
-            className="bg-white border-2 border-blue-300 rounded-lg p-6 space-y-4"
-          >
-            {/* QR Code */}
-            <div className="text-center">
-              <div className="inline-block bg-white p-4 rounded-lg border border-gray-200">
-                <QRCodeSVG value={token.tokenId.toString()} size={150} level="H" />
+        {myTokens.map((token) => {
+          const key = getTokenKey(token.queueId, token.tokenId);
+          return (
+            <div
+              key={key}
+              className="bg-white border-2 border-blue-300 rounded-lg p-6 space-y-4"
+            >
+              {/* Queue Name Badge */}
+              <div className="flex justify-between items-start">
+                <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full">
+                  {getQueueName(token.queueId)}
+                </span>
               </div>
-              <p className="mt-3 text-2xl font-bold text-blue-600">
-                Position #{token.tokenId}
-              </p>
-              {token.isForSale && (
-                <p className="mt-1 text-green-600 font-medium">
-                  Listed for {(parseInt(token.price) / 10000000).toFixed(2)} XLM
-                </p>
-              )}
-            </div>
 
-            {/* List for Sale (if not already listed) */}
-            {!token.isForSale ? (
-              <div className="bg-gray-50 rounded-lg p-4">
-                <h4 className="font-semibold text-gray-900 mb-2 text-sm">
-                  List for Sale
-                </h4>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={prices[token.tokenId] || ""}
-                    onChange={(e) => updatePrice(token.tokenId, e.target.value)}
-                    onInput={(e) => updatePrice(token.tokenId, (e.target as HTMLInputElement).value)}
-                    placeholder="Price in XLM"
-                    disabled={listing === token.tokenId}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
+              {/* QR Code */}
+              <div className="text-center">
+                <div className="inline-block bg-white p-4 rounded-lg border border-gray-200">
+                  <QRCodeSVG value={`${token.queueId}-${token.tokenId}`} size={150} level="H" />
+                </div>
+                <p className="mt-3 text-2xl font-bold text-blue-600">
+                  Position #{token.tokenId}
+                </p>
+                {token.isForSale && (
+                  <p className="mt-1 text-green-600 font-medium">
+                    Listed for {(parseInt(token.price) / 10000000).toFixed(2)} XLM
+                  </p>
+                )}
+              </div>
+
+              {/* List for Sale (if not already listed) */}
+              {!token.isForSale ? (
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-900 mb-2 text-sm">
+                    List for Sale
+                  </h4>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={prices[key] || ""}
+                      onChange={(e) => updatePrice(token.queueId, token.tokenId, e.target.value)}
+                      onInput={(e) => updatePrice(token.queueId, token.tokenId, (e.target as HTMLInputElement).value)}
+                      placeholder="Price in XLM"
+                      disabled={listing === key}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    <button
+                      onClick={() => handleListForSale(token.queueId, token.tokenId)}
+                      disabled={listing === key || !prices[key]}
+                      className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {listing === key ? "Listing..." : "List"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-green-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-green-900 mb-2 text-sm">
+                    ✓ Currently Listed
+                  </h4>
+                  <p className="text-green-700 text-sm mb-3">
+                    This token is listed for {(parseInt(token.price) / 10000000).toFixed(2)} XLM
+                  </p>
                   <button
-                    onClick={() => handleListForSale(token.tokenId)}
-                    disabled={listing === token.tokenId || !prices[token.tokenId]}
-                    className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => handleCancelSale(token.queueId, token.tokenId)}
+                    disabled={canceling === key}
+                    className="w-full px-4 py-2 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {listing === token.tokenId ? "Listing..." : "List"}
+                    {canceling === key ? "Canceling..." : "Cancel Sale"}
                   </button>
                 </div>
-              </div>
-            ) : (
-              <div className="bg-green-50 rounded-lg p-4">
-                <h4 className="font-semibold text-green-900 mb-2 text-sm">
-                  ✓ Currently Listed
-                </h4>
-                <p className="text-green-700 text-sm mb-3">
-                  This token is listed for {(parseInt(token.price) / 10000000).toFixed(2)} XLM
-                </p>
-                <button
-                  onClick={() => handleCancelSale(token.tokenId)}
-                  disabled={canceling === token.tokenId}
-                  className="w-full px-4 py-2 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {canceling === token.tokenId ? "Canceling..." : "Cancel Sale"}
-                </button>
-              </div>
-            )}
+              )}
 
-            {/* Info */}
-            <div className="bg-blue-50 rounded p-3 text-xs text-gray-600">
-              <p className="font-medium text-gray-900 mb-1">QR Verification</p>
-              <p>Show this QR code to verify you own position #{token.tokenId}</p>
+              {/* Info */}
+              <div className="bg-blue-50 rounded p-3 text-xs text-gray-600">
+                <p className="font-medium text-gray-900 mb-1">QR Verification</p>
+                <p>Show this QR code to verify you own position #{token.tokenId}</p>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

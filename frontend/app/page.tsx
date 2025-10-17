@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import WalletConnect from "@/components/WalletConnect";
+import QueueSelector from "@/components/QueueSelector";
 import QueueList from "@/components/QueueList";
 import MyToken from "@/components/MyToken";
 import Verifier from "@/components/Verifier";
@@ -10,6 +11,7 @@ import { signTx } from "@/lib/freighter";
 
 export default function Home() {
   const [userAddress, setUserAddress] = useState<string | null>(null);
+  const [selectedQueueId, setSelectedQueueId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"queue" | "mytoken" | "verifier">("queue");
   const [joining, setJoining] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -20,10 +22,15 @@ export default function Home() {
       return;
     }
 
+    if (selectedQueueId === null) {
+      alert("Please select a queue first");
+      return;
+    }
+
     setJoining(true);
     try {
       // Build transaction
-      const txXdr = await buildJoinQueueTx(userAddress);
+      const txXdr = await buildJoinQueueTx(userAddress, selectedQueueId);
       
       // Sign with Freighter
       const signedXdr = await signTx(txXdr, userAddress);
@@ -75,16 +82,25 @@ export default function Home() {
           />
         </div>
 
+        {/* Queue Selector */}
+        <div className="mb-8">
+          <QueueSelector
+            userAddress={userAddress}
+            selectedQueueId={selectedQueueId}
+            onQueueSelect={setSelectedQueueId}
+          />
+        </div>
+
         {userAddress && (
           <>
             {/* Join Queue Button */}
             <div className="flex justify-center mb-8">
               <button
                 onClick={handleJoinQueue}
-                disabled={joining}
+                disabled={joining || selectedQueueId === null}
                 className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-lg shadow-lg"
               >
-                {joining ? "Joining Queue..." : "🎫 Join Queue"}
+                {joining ? "Joining Queue..." : "🎫 Join Selected Queue"}
               </button>
             </div>
 
@@ -130,6 +146,7 @@ export default function Home() {
                 <QueueList
                   key={refreshKey}
                   userAddress={userAddress}
+                  queueId={selectedQueueId}
                   onRefresh={handleRefresh}
                 />
               )}
@@ -154,6 +171,7 @@ export default function Home() {
               <p>✨ Join a queue and get a tradable NFT</p>
               <p>💰 List your spot for sale or buy a better position</p>
               <p>📱 Verify ownership with QR codes</p>
+              <p>🏪 Multiple queues for different venues</p>
             </div>
           </div>
         )}
@@ -164,7 +182,7 @@ export default function Home() {
           <p className="mt-1">
             Contract:{" "}
             <code className="bg-gray-100 px-2 py-1 rounded text-xs">
-              CCT7MMUOIM46ABX6FXSIYNJSHLI4CBF2RZ2MSVZM6YXLS4PABU6SPNPE
+              CB4KYG6XSUXNCTEX7APZ4R3ATJG3XKD7GGCT3EWFESWRCGAX734EQR45
             </code>
           </p>
         </div>

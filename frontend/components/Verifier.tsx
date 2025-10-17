@@ -2,12 +2,14 @@
 
 import { useState, useRef } from "react";
 import { Html5Qrcode } from "html5-qrcode";
-import { getOwnerOf } from "@/lib/stellar";
+import { getOwnerOf, getQueueName } from "@/lib/stellar";
 
 export default function Verifier() {
   const [scanning, setScanning] = useState(false);
   const [tokenId, setTokenId] = useState("");
   const [verificationResult, setVerificationResult] = useState<{
+    queueId: number;
+    queueName: string;
     tokenId: number;
     owner: string;
   } | null>(null);
@@ -17,8 +19,8 @@ export default function Verifier() {
 
   async function handleVerify(idToVerify?: string) {
     const id = idToVerify || tokenId;
-    if (!id || isNaN(parseInt(id))) {
-      setError("Please enter a valid token ID");
+    if (!id || id.trim() === "") {
+      setError("Please enter a token ID (format: queueId-tokenId, e.g., 0-5)");
       return;
     }
 
@@ -26,13 +28,39 @@ export default function Verifier() {
     setVerificationResult(null);
 
     try {
-      const parsedId = parseInt(id.trim());
-      console.log("Verifying token ID:", parsedId);
+      // Parse format: "queueId-tokenId" or just "tokenId" (defaults to queue 0)
+      const parts = id.trim().split("-");
+      let queueId: number;
+      let tId: number;
       
-      const owner = await getOwnerOf(parsedId);
+      if (parts.length === 2) {
+        queueId = parseInt(parts[0]);
+        tId = parseInt(parts[1]);
+      } else if (parts.length === 1) {
+        queueId = 0; // Default to first queue
+        tId = parseInt(parts[0]);
+      } else {
+        setError("Invalid format. Use 'queueId-tokenId' (e.g., 0-5)");
+        return;
+      }
+
+      if (isNaN(queueId) || isNaN(tId)) {
+        setError("Invalid token ID format");
+        return;
+      }
+
+      console.log(`Verifying queue ${queueId}, token ${tId}`);
+      
+      const [owner, queueName] = await Promise.all([
+        getOwnerOf(queueId, tId),
+        getQueueName(queueId)
+      ]);
+
       if (owner) {
         setVerificationResult({
-          tokenId: parsedId,
+          queueId,
+          queueName: queueName || `Queue #${queueId}`,
+          tokenId: tId,
           owner,
         });
         setError(""); // Clear any previous errors
@@ -148,16 +176,16 @@ export default function Verifier() {
         <div className="space-y-4">
           <div className="bg-white border border-gray-200 rounded-lg p-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Token ID
+              Token ID (format: queueId-tokenId)
             </label>
             <div className="flex gap-2">
               <input
-                type="number"
+                type="text"
                 value={tokenId}
                 onChange={(e) => setTokenId(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Enter token ID"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="e.g., 0-5 or just 5"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <button
                 onClick={() => handleVerify()}
@@ -166,6 +194,9 @@ export default function Verifier() {
                 Verify
               </button>
             </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Scan QR code or enter manually
+            </p>
           </div>
 
           <button
@@ -198,15 +229,18 @@ export default function Verifier() {
 
       {verificationResult && (
         <div className="bg-green-50 border border-green-300 rounded-lg p-4">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-3">
             <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
               <span className="text-white text-xl">✓</span>
             </div>
             <p className="text-green-900 font-bold text-lg">Verified</p>
           </div>
-          <div className="space-y-1 text-sm">
+          <div className="space-y-2 text-sm">
             <p className="text-green-800">
-              <span className="font-semibold">Token ID:</span> #{verificationResult.tokenId}
+              <span className="font-semibold">Queue:</span> {verificationResult.queueName}
+            </p>
+            <p className="text-green-800">
+              <span className="font-semibold">Position:</span> #{verificationResult.tokenId}
             </p>
             <p className="text-green-800">
               <span className="font-semibold">Owner:</span>

@@ -1,7 +1,7 @@
 import * as StellarSdk from "@stellar/stellar-sdk";
 
 // Contract deployed on Testnet
-export const CONTRACT_ID = "CDGKGEEKUSPNFBMC5MHKLDEJ67I5UMUAAOA5CYDOKLCWAM3NDSSCQ2EG";
+export const CONTRACT_ID = "CB4KYG6XSUXNCTEX7APZ4R3ATJG3XKD7GGCT3EWFESWRCGAX734EQR45";
 export const NETWORK_PASSPHRASE = StellarSdk.Networks.TESTNET;
 export const RPC_URL = "https://soroban-testnet.stellar.org:443";
 
@@ -20,8 +20,197 @@ export async function getNativeTokenAddress(): Promise<string> {
   return nativeTokenAddress;
 }
 
-// Build transaction for joining the queue
-export async function buildJoinQueueTx(userAddress: string): Promise<string> {
+// Queue Info interface
+export interface QueueInfo {
+  queueId: number;
+  name: string;
+  creator: string;
+  tokenCount: number;
+}
+
+// Queue Token interface
+export interface QueueToken {
+  queueId: number;
+  tokenId: number;
+  owner: string;
+  price: string;
+  isForSale: boolean;
+}
+
+// ============================================================================
+// QUEUE MANAGEMENT FUNCTIONS
+// ============================================================================
+
+// Build transaction for creating a new queue
+export async function buildCreateQueueTx(
+  userAddress: string,
+  queueName: string
+): Promise<string> {
+  const account = await server.getAccount(userAddress);
+  const contract = new StellarSdk.Contract(CONTRACT_ID);
+  
+  const tx = new StellarSdk.TransactionBuilder(account, {
+    fee: StellarSdk.BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        "create_queue",
+        StellarSdk.nativeToScVal(queueName, { type: "string" }),
+        StellarSdk.nativeToScVal(userAddress, { type: "address" })
+      )
+    )
+    .setTimeout(300)
+    .build();
+
+  const prepared = await server.prepareTransaction(tx);
+  return prepared.toXDR();
+}
+
+// Get total number of queues
+export async function getQueueCount(): Promise<number> {
+  try {
+    const contract = new StellarSdk.Contract(CONTRACT_ID);
+    const sourceAccount = await server.getAccount(
+      "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"
+    );
+    
+    const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
+      fee: StellarSdk.BASE_FEE,
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(contract.call("get_queue_count"))
+      .setTimeout(30)
+      .build();
+
+    const simulation = await server.simulateTransaction(tx);
+    
+    if (StellarSdk.rpc.Api.isSimulationSuccess(simulation) && simulation.result) {
+      const scVal = simulation.result.retval;
+      const nativeValue = StellarSdk.scValToNative(scVal);
+      return Number(nativeValue);
+    }
+    
+    return 0;
+  } catch (err) {
+    console.error("Error getting queue count:", err);
+    return 0;
+  }
+}
+
+// Get queue name
+export async function getQueueName(queueId: number): Promise<string | null> {
+  try {
+    const contract = new StellarSdk.Contract(CONTRACT_ID);
+    const sourceAccount = await server.getAccount(
+      "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"
+    );
+    
+    const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
+      fee: StellarSdk.BASE_FEE,
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(
+        contract.call(
+          "get_queue_name",
+          StellarSdk.nativeToScVal(queueId, { type: "u32" })
+        )
+      )
+      .setTimeout(30)
+      .build();
+
+    const simulation = await server.simulateTransaction(tx);
+    
+    if (StellarSdk.rpc.Api.isSimulationSuccess(simulation) && simulation.result) {
+      const scVal = simulation.result.retval;
+      const nativeValue = StellarSdk.scValToNative(scVal);
+      return nativeValue;
+    }
+    
+    return null;
+  } catch (err) {
+    console.error("Error getting queue name:", err);
+    return null;
+  }
+}
+
+// Get queue creator
+export async function getQueueCreator(queueId: number): Promise<string | null> {
+  try {
+    const contract = new StellarSdk.Contract(CONTRACT_ID);
+    const sourceAccount = await server.getAccount(
+      "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"
+    );
+    
+    const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
+      fee: StellarSdk.BASE_FEE,
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(
+        contract.call(
+          "get_queue_creator",
+          StellarSdk.nativeToScVal(queueId, { type: "u32" })
+        )
+      )
+      .setTimeout(30)
+      .build();
+
+    const simulation = await server.simulateTransaction(tx);
+    
+    if (StellarSdk.rpc.Api.isSimulationSuccess(simulation) && simulation.result) {
+      const scVal = simulation.result.retval;
+      const nativeValue = StellarSdk.scValToNative(scVal);
+      return nativeValue;
+    }
+    
+    return null;
+  } catch (err) {
+    console.error("Error getting queue creator:", err);
+    return null;
+  }
+}
+
+// Get all queues with their info
+export async function getAllQueues(): Promise<QueueInfo[]> {
+  try {
+    const queueCount = await getQueueCount();
+    
+    // Fetch all queue info in parallel
+    const promises = Array.from({ length: queueCount }, async (_, i) => {
+      const [name, creator, tokenCount] = await Promise.all([
+        getQueueName(i),
+        getQueueCreator(i),
+        getNextTokenId(i)
+      ]);
+      
+      if (name && creator !== null) {
+        return {
+          queueId: i,
+          name,
+          creator,
+          tokenCount
+        };
+      }
+      return null;
+    });
+    
+    const results = await Promise.all(promises);
+    return results.filter((q): q is QueueInfo => q !== null);
+  } catch (err) {
+    console.error("Error getting all queues:", err);
+    return [];
+  }
+}
+
+// ============================================================================
+// TOKEN TRANSACTION BUILDERS
+// ============================================================================
+
+// Build transaction for joining a queue
+export async function buildJoinQueueTx(
+  userAddress: string,
+  queueId: number
+): Promise<string> {
   const account = await server.getAccount(userAddress);
   const contract = new StellarSdk.Contract(CONTRACT_ID);
   
@@ -32,6 +221,7 @@ export async function buildJoinQueueTx(userAddress: string): Promise<string> {
     .addOperation(
       contract.call(
         "join_queue",
+        StellarSdk.nativeToScVal(queueId, { type: "u32" }),
         StellarSdk.nativeToScVal(userAddress, { type: "address" })
       )
     )
@@ -45,6 +235,7 @@ export async function buildJoinQueueTx(userAddress: string): Promise<string> {
 // Build transaction for listing token for sale
 export async function buildListForSaleTx(
   userAddress: string,
+  queueId: number,
   tokenId: number,
   price: string
 ): Promise<string> {
@@ -61,6 +252,7 @@ export async function buildListForSaleTx(
     .addOperation(
       contract.call(
         "list_for_sale",
+        StellarSdk.nativeToScVal(queueId, { type: "u32" }),
         StellarSdk.nativeToScVal(tokenId, { type: "u32" }),
         StellarSdk.nativeToScVal(priceBigInt, { type: "u128" })
       )
@@ -75,6 +267,7 @@ export async function buildListForSaleTx(
 // Build transaction for canceling token sale
 export async function buildCancelSaleTx(
   userAddress: string,
+  queueId: number,
   tokenId: number
 ): Promise<string> {
   const account = await server.getAccount(userAddress);
@@ -87,6 +280,7 @@ export async function buildCancelSaleTx(
     .addOperation(
       contract.call(
         "cancel_sale",
+        StellarSdk.nativeToScVal(queueId, { type: "u32" }),
         StellarSdk.nativeToScVal(tokenId, { type: "u32" })
       )
     )
@@ -100,6 +294,7 @@ export async function buildCancelSaleTx(
 // Build transaction for buying a token
 export async function buildBuyTokenTx(
   buyerAddress: string,
+  queueId: number,
   tokenId: number
 ): Promise<string> {
   const account = await server.getAccount(buyerAddress);
@@ -113,6 +308,7 @@ export async function buildBuyTokenTx(
     .addOperation(
       contract.call(
         "buy_token",
+        StellarSdk.nativeToScVal(queueId, { type: "u32" }),
         StellarSdk.nativeToScVal(tokenId, { type: "u32" }),
         StellarSdk.nativeToScVal(buyerAddress, { type: "address" }),
         StellarSdk.nativeToScVal(xlmToken, { type: "address" })
@@ -140,12 +336,16 @@ export async function submitTransaction(signedXdr: string): Promise<StellarSdk.r
   return status;
 }
 
+// ============================================================================
+// TOKEN QUERY FUNCTIONS
+// ============================================================================
+
 // Get owner of a token
-export async function getOwnerOf(tokenId: number): Promise<string | null> {
+export async function getOwnerOf(queueId: number, tokenId: number): Promise<string | null> {
   try {
     const contract = new StellarSdk.Contract(CONTRACT_ID);
     const sourceAccount = await server.getAccount(
-      "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF" // Null account for view calls
+      "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"
     );
     
     const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
@@ -155,6 +355,7 @@ export async function getOwnerOf(tokenId: number): Promise<string | null> {
       .addOperation(
         contract.call(
           "owner_of",
+          StellarSdk.nativeToScVal(queueId, { type: "u32" }),
           StellarSdk.nativeToScVal(tokenId, { type: "u32" })
         )
       )
@@ -165,7 +366,6 @@ export async function getOwnerOf(tokenId: number): Promise<string | null> {
     
     if (StellarSdk.rpc.Api.isSimulationSuccess(simulation) && simulation.result) {
       const scVal = simulation.result.retval;
-      // Convert ScVal address to native string
       const nativeValue = StellarSdk.scValToNative(scVal);
       return nativeValue;
     }
@@ -178,7 +378,7 @@ export async function getOwnerOf(tokenId: number): Promise<string | null> {
 }
 
 // Get price of a token
-export async function getPrice(tokenId: number): Promise<string | null> {
+export async function getPrice(queueId: number, tokenId: number): Promise<string | null> {
   try {
     const contract = new StellarSdk.Contract(CONTRACT_ID);
     const sourceAccount = await server.getAccount(
@@ -192,6 +392,7 @@ export async function getPrice(tokenId: number): Promise<string | null> {
       .addOperation(
         contract.call(
           "get_price",
+          StellarSdk.nativeToScVal(queueId, { type: "u32" }),
           StellarSdk.nativeToScVal(tokenId, { type: "u32" })
         )
       )
@@ -202,7 +403,6 @@ export async function getPrice(tokenId: number): Promise<string | null> {
     
     if (StellarSdk.rpc.Api.isSimulationSuccess(simulation) && simulation.result) {
       const scVal = simulation.result.retval;
-      // Convert ScVal to native JavaScript value
       const nativeValue = StellarSdk.scValToNative(scVal);
       return nativeValue.toString();
     }
@@ -214,8 +414,8 @@ export async function getPrice(tokenId: number): Promise<string | null> {
   }
 }
 
-// Get next token ID (total minted)
-export async function getNextTokenId(): Promise<number> {
+// Get next token ID for a queue (total minted in that queue)
+export async function getNextTokenId(queueId: number): Promise<number> {
   try {
     const contract = new StellarSdk.Contract(CONTRACT_ID);
     const sourceAccount = await server.getAccount(
@@ -226,7 +426,12 @@ export async function getNextTokenId(): Promise<number> {
       fee: StellarSdk.BASE_FEE,
       networkPassphrase: NETWORK_PASSPHRASE,
     })
-      .addOperation(contract.call("get_next_token_id"))
+      .addOperation(
+        contract.call(
+          "get_next_token_id",
+          StellarSdk.nativeToScVal(queueId, { type: "u32" })
+        )
+      )
       .setTimeout(30)
       .build();
 
@@ -234,7 +439,6 @@ export async function getNextTokenId(): Promise<number> {
     
     if (StellarSdk.rpc.Api.isSimulationSuccess(simulation) && simulation.result) {
       const scVal = simulation.result.retval;
-      // Convert ScVal to native JavaScript value
       const nativeValue = StellarSdk.scValToNative(scVal);
       return Number(nativeValue);
     }
@@ -246,21 +450,14 @@ export async function getNextTokenId(): Promise<number> {
   }
 }
 
-// Get all queue data
-export interface QueueToken {
-  tokenId: number;
-  owner: string;
-  price: string;
-  isForSale: boolean;
-}
-
-export async function getQueueData(): Promise<QueueToken[]> {
+// Get all tokens in a specific queue
+export async function getQueueData(queueId: number): Promise<QueueToken[]> {
   try {
-    const totalTokens = await getNextTokenId();
+    const totalTokens = await getNextTokenId(queueId);
     
     // Fetch all owners and prices in parallel
-    const ownerPromises = Array.from({ length: totalTokens }, (_, i) => getOwnerOf(i));
-    const pricePromises = Array.from({ length: totalTokens }, (_, i) => getPrice(i));
+    const ownerPromises = Array.from({ length: totalTokens }, (_, i) => getOwnerOf(queueId, i));
+    const pricePromises = Array.from({ length: totalTokens }, (_, i) => getPrice(queueId, i));
     
     const [owners, prices] = await Promise.all([
       Promise.all(ownerPromises),
@@ -272,6 +469,7 @@ export async function getQueueData(): Promise<QueueToken[]> {
     for (let i = 0; i < totalTokens; i++) {
       if (owners[i]) {
         tokens.push({
+          queueId,
           tokenId: i,
           owner: owners[i]!,
           price: prices[i] || "0",
@@ -287,10 +485,55 @@ export async function getQueueData(): Promise<QueueToken[]> {
   }
 }
 
-// Optimized: Find ALL user's tokens without fetching entire queue
+// Get user's tokens across ALL queues
 export async function getUserTokens(userAddress: string): Promise<QueueToken[]> {
   try {
-    const totalTokens = await getNextTokenId();
+    const queueCount = await getQueueCount();
+    const allUserTokens: QueueToken[] = [];
+    
+    // Check each queue
+    for (let queueId = 0; queueId < queueCount; queueId++) {
+      const totalTokens = await getNextTokenId(queueId);
+      
+      // Check all tokens in parallel batches
+      const batchSize = 10;
+      for (let start = 0; start < totalTokens; start += batchSize) {
+        const end = Math.min(start + batchSize, totalTokens);
+        const batch = Array.from({ length: end - start }, (_, i) => start + i);
+        
+        const owners = await Promise.all(batch.map(i => getOwnerOf(queueId, i)));
+        
+        // Find all tokens owned by user in this batch
+        const userTokenIds = batch.filter((tokenId, index) => owners[index] === userAddress);
+        
+        // Get prices for user's tokens
+        if (userTokenIds.length > 0) {
+          const prices = await Promise.all(userTokenIds.map(id => getPrice(queueId, id)));
+          
+          userTokenIds.forEach((tokenId, index) => {
+            allUserTokens.push({
+              queueId,
+              tokenId,
+              owner: userAddress,
+              price: prices[index] || "0",
+              isForSale: prices[index] !== "0" && prices[index] !== null,
+            });
+          });
+        }
+      }
+    }
+    
+    return allUserTokens;
+  } catch (err) {
+    console.error("Error getting user tokens:", err);
+    return [];
+  }
+}
+
+// Get user's tokens in a specific queue
+export async function getUserTokensInQueue(userAddress: string, queueId: number): Promise<QueueToken[]> {
+  try {
+    const totalTokens = await getNextTokenId(queueId);
     const userTokens: QueueToken[] = [];
     
     // Check all tokens in parallel batches
@@ -299,17 +542,18 @@ export async function getUserTokens(userAddress: string): Promise<QueueToken[]> 
       const end = Math.min(start + batchSize, totalTokens);
       const batch = Array.from({ length: end - start }, (_, i) => start + i);
       
-      const owners = await Promise.all(batch.map(i => getOwnerOf(i)));
+      const owners = await Promise.all(batch.map(i => getOwnerOf(queueId, i)));
       
       // Find all tokens owned by user in this batch
       const userTokenIds = batch.filter((tokenId, index) => owners[index] === userAddress);
       
       // Get prices for user's tokens
       if (userTokenIds.length > 0) {
-        const prices = await Promise.all(userTokenIds.map(id => getPrice(id)));
+        const prices = await Promise.all(userTokenIds.map(id => getPrice(queueId, id)));
         
         userTokenIds.forEach((tokenId, index) => {
           userTokens.push({
+            queueId,
             tokenId,
             owner: userAddress,
             price: prices[index] || "0",
@@ -321,14 +565,7 @@ export async function getUserTokens(userAddress: string): Promise<QueueToken[]> 
     
     return userTokens;
   } catch (err) {
-    console.error("Error getting user tokens:", err);
+    console.error("Error getting user tokens in queue:", err);
     return [];
   }
 }
-
-// Backward compatibility: Get user's first token
-export async function getUserToken(userAddress: string): Promise<QueueToken | null> {
-  const tokens = await getUserTokens(userAddress);
-  return tokens.length > 0 ? tokens[0] : null;
-}
-

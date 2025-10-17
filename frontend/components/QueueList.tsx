@@ -6,21 +6,27 @@ import { signTx } from "@/lib/freighter";
 
 interface QueueListProps {
   userAddress: string | null;
+  queueId: number | null;
   onRefresh?: () => void;
 }
 
-export default function QueueList({ userAddress, onRefresh }: QueueListProps) {
+export default function QueueList({ userAddress, queueId, onRefresh }: QueueListProps) {
   const [tokens, setTokens] = useState<QueueToken[]>([]);
   const [loading, setLoading] = useState(true);
   const [buying, setBuying] = useState<number | null>(null);
 
   useEffect(() => {
-    loadQueue();
-  }, []);
+    if (queueId !== null) {
+      loadQueue();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queueId]);
 
   async function loadQueue() {
+    if (queueId === null) return;
+    
     setLoading(true);
-    const data = await getQueueData();
+    const data = await getQueueData(queueId);
     setTokens(data);
     setLoading(false);
   }
@@ -31,10 +37,15 @@ export default function QueueList({ userAddress, onRefresh }: QueueListProps) {
       return;
     }
 
+    if (queueId === null) {
+      alert("No queue selected");
+      return;
+    }
+
     setBuying(tokenId);
     try {
       // Build transaction
-      const txXdr = await buildBuyTokenTx(userAddress, tokenId);
+      const txXdr = await buildBuyTokenTx(userAddress, queueId, tokenId);
       
       // Sign with Freighter
       const signedXdr = await signTx(txXdr, userAddress);
@@ -59,6 +70,14 @@ export default function QueueList({ userAddress, onRefresh }: QueueListProps) {
     } finally {
       setBuying(null);
     }
+  }
+
+  if (queueId === null) {
+    return (
+      <div className="text-center py-8 bg-gray-50 rounded-lg">
+        <p className="text-gray-600">Please select a queue to view</p>
+      </div>
+    );
   }
 
   if (loading) {
