@@ -14,6 +14,7 @@ NC='\033[0m' # No Color
 
 echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   StellarSkip Queue Reset Script      ║${NC}"
+echo -e "${BLUE}║   (Multi-Queue Support)                ║${NC}"
 echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
 echo ""
 
@@ -54,7 +55,7 @@ stellar contract invoke \
   --id $CONTRACT_ID \
   --source alice \
   --network testnet \
-  -- init_queue \
+  -- init_contract \
   --admin $ADMIN_ADDRESS > /dev/null 2>&1
 
 echo -e "${GREEN}✅ Contract initialized${NC}"
@@ -77,88 +78,131 @@ echo ""
 
 # Step 5: Verify deployment
 echo -e "${BLUE}🔍 Step 5: Verifying deployment...${NC}"
-TOKEN_COUNT=$(stellar contract invoke \
+QUEUE_COUNT=$(stellar contract invoke \
   --id $CONTRACT_ID \
   --source alice \
   --network testnet \
-  -- get_next_token_id 2>&1 | grep -o '"[0-9]*"' | tr -d '"')
+  -- get_queue_count 2>&1 | tail -1)
 
-if [ "$TOKEN_COUNT" = "0" ]; then
-    echo -e "${GREEN}✅ Verification passed - Queue is empty${NC}"
+if [ "$QUEUE_COUNT" = "0" ]; then
+    echo -e "${GREEN}✅ Verification passed - No queues yet${NC}"
 else
-    echo -e "${YELLOW}⚠️  Warning: Queue has $TOKEN_COUNT tokens${NC}"
+    echo -e "${YELLOW}⚠️  Warning: Contract has $QUEUE_COUNT queues${NC}"
 fi
 echo ""
 
 # Step 6: Ask about demo data
 echo -e "${BLUE}🎬 Step 6: Demo data setup${NC}"
 echo ""
-read -p "Do you want to set up demo data (10 users with realistic prices)? (y/n) " -n 1 -r
+read -p "Do you want to set up demo data with multiple queues? (y/n) " -n 1 -r
 echo ""
 
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo -e "${BLUE}Setting up demo data...${NC}"
     echo ""
     
+    # Create 3 demo queues
+    echo -e "${BLUE}📋 Creating demo queues...${NC}"
+    
+    echo -e "  Creating 'Coffee Shop Morning Rush'..."
+    stellar contract invoke --id $CONTRACT_ID --source alice --network testnet \
+      -- create_queue --name "Coffee Shop Morning Rush" --creator $ADMIN_ADDRESS > /dev/null 2>&1
+    echo -e "  ${GREEN}✓${NC} Queue #0 created"
+    
+    echo -e "  Creating 'Theme Park Fast Pass'..."
+    stellar contract invoke --id $CONTRACT_ID --source alice --network testnet \
+      -- create_queue --name "Theme Park Fast Pass" --creator $ADMIN_ADDRESS > /dev/null 2>&1
+    echo -e "  ${GREEN}✓${NC} Queue #1 created"
+    
+    echo -e "  Creating 'Concert VIP Entry'..."
+    stellar contract invoke --id $CONTRACT_ID --source alice --network testnet \
+      -- create_queue --name "Concert VIP Entry" --creator $ADMIN_ADDRESS > /dev/null 2>&1
+    echo -e "  ${GREEN}✓${NC} Queue #2 created"
+    echo ""
+    
     # Create demo users if they don't exist
-    echo -e "Creating demo users..."
-    for i in {1..10}; do
-        if ! stellar keys address demo$i > /dev/null 2>&1; then
-            stellar keys generate demo$i --network testnet > /dev/null 2>&1
-            echo -e "  ${GREEN}✓${NC} demo$i created"
+    echo -e "${BLUE}👥 Creating demo users...${NC}"
+    for user in bob carol dave; do
+        if ! stellar keys address $user > /dev/null 2>&1; then
+            stellar keys generate $user --network testnet > /dev/null 2>&1
+            echo -e "  ${GREEN}✓${NC} $user created"
         else
-            echo -e "  ${YELLOW}→${NC} demo$i exists"
+            echo -e "  ${YELLOW}→${NC} $user exists"
         fi
     done
     echo ""
     
     # Fund demo users
-    echo -e "Funding demo users..."
-    for i in {1..10}; do
-        ADDRESS=$(stellar keys address demo$i)
+    echo -e "${BLUE}💰 Funding demo users...${NC}"
+    for user in bob carol dave; do
+        ADDRESS=$(stellar keys address $user)
         curl -s "https://friendbot.stellar.org/?addr=$ADDRESS" > /dev/null
-        echo -e "  ${GREEN}✓${NC} demo$i funded"
+        echo -e "  ${GREEN}✓${NC} $user funded"
         sleep 2
     done
     echo ""
     
-    # Join queue
-    echo -e "Joining queue..."
-    for i in {1..10}; do
-        stellar contract invoke \
-          --id $CONTRACT_ID \
-          --source demo$i \
-          --network testnet \
-          -- join_queue \
-          --user $(stellar keys address demo$i) > /dev/null 2>&1
-        echo -e "  ${GREEN}✓${NC} demo$i joined as position #$((i-1))"
+    # Join Coffee Shop queue (Queue #0)
+    echo -e "${BLUE}☕ Populating Coffee Shop queue...${NC}"
+    for user in bob carol dave alice; do
+        stellar contract invoke --id $CONTRACT_ID --source $user --network testnet \
+          -- join_queue --queue_id 0 --user $(stellar keys address $user) > /dev/null 2>&1
+        echo -e "  ${GREEN}✓${NC} $user joined Coffee Shop"
         sleep 1
     done
     echo ""
     
+    # Join Theme Park queue (Queue #1)
+    echo -e "${BLUE}🎢 Populating Theme Park queue...${NC}"
+    for user in bob carol; do
+        stellar contract invoke --id $CONTRACT_ID --source $user --network testnet \
+          -- join_queue --queue_id 1 --user $(stellar keys address $user) > /dev/null 2>&1
+        echo -e "  ${GREEN}✓${NC} $user joined Theme Park"
+        sleep 1
+    done
+    echo ""
+    
+    # Join Concert queue (Queue #2)
+    echo -e "${BLUE}🎵 Populating Concert queue...${NC}"
+    stellar contract invoke --id $CONTRACT_ID --source dave --network testnet \
+      -- join_queue --queue_id 2 --user $(stellar keys address dave) > /dev/null 2>&1
+    echo -e "  ${GREEN}✓${NC} dave joined Concert"
+    echo ""
+    
     # List tokens for sale
-    echo -e "Listing tokens for sale..."
+    echo -e "${BLUE}💵 Listing tokens for sale...${NC}"
     
-    stellar contract invoke --id $CONTRACT_ID --source demo2 --network testnet -- list_for_sale --token_id 1 --price 100000000 > /dev/null 2>&1
-    echo -e "  ${GREEN}✓${NC} Position #1: 10 XLM"
+    # Coffee Shop Queue #0
+    stellar contract invoke --id $CONTRACT_ID --source bob --network testnet \
+      -- list_for_sale --queue_id 0 --token_id 0 --price 30000000 > /dev/null 2>&1
+    echo -e "  ${GREEN}✓${NC} Coffee Shop #0 (Bob): 3 XLM"
     
-    stellar contract invoke --id $CONTRACT_ID --source demo3 --network testnet -- list_for_sale --token_id 2 --price 80000000 > /dev/null 2>&1
-    echo -e "  ${GREEN}✓${NC} Position #2: 8 XLM"
+    stellar contract invoke --id $CONTRACT_ID --source carol --network testnet \
+      -- list_for_sale --queue_id 0 --token_id 1 --price 50000000 > /dev/null 2>&1
+    echo -e "  ${GREEN}✓${NC} Coffee Shop #1 (Carol): 5 XLM"
     
-    stellar contract invoke --id $CONTRACT_ID --source demo5 --network testnet -- list_for_sale --token_id 4 --price 60000000 > /dev/null 2>&1
-    echo -e "  ${GREEN}✓${NC} Position #4: 6 XLM"
-    
-    stellar contract invoke --id $CONTRACT_ID --source demo6 --network testnet -- list_for_sale --token_id 5 --price 55000000 > /dev/null 2>&1
-    echo -e "  ${GREEN}✓${NC} Position #5: 5.5 XLM"
-    
-    stellar contract invoke --id $CONTRACT_ID --source demo8 --network testnet -- list_for_sale --token_id 7 --price 35000000 > /dev/null 2>&1
-    echo -e "  ${GREEN}✓${NC} Position #7: 3.5 XLM"
-    
-    stellar contract invoke --id $CONTRACT_ID --source demo10 --network testnet -- list_for_sale --token_id 9 --price 20000000 > /dev/null 2>&1
-    echo -e "  ${GREEN}✓${NC} Position #9: 2 XLM"
+    # Theme Park Queue #1
+    stellar contract invoke --id $CONTRACT_ID --source bob --network testnet \
+      -- list_for_sale --queue_id 1 --token_id 0 --price 1000000000 > /dev/null 2>&1
+    echo -e "  ${GREEN}✓${NC} Theme Park #0 (Bob): 100 XLM"
     
     echo ""
     echo -e "${GREEN}✨ Demo data setup complete!${NC}"
+    echo ""
+    echo -e "${BLUE}📊 Demo Summary:${NC}"
+    echo -e "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "  ${YELLOW}Queue #0: Coffee Shop Morning Rush${NC}"
+    echo -e "    • 4 members (Bob, Carol, Dave, Alice)"
+    echo -e "    • 2 tokens for sale (3 XLM, 5 XLM)"
+    echo ""
+    echo -e "  ${YELLOW}Queue #1: Theme Park Fast Pass${NC}"
+    echo -e "    • 2 members (Bob, Carol)"
+    echo -e "    • 1 token for sale (100 XLM)"
+    echo ""
+    echo -e "  ${YELLOW}Queue #2: Concert VIP Entry${NC}"
+    echo -e "    • 1 member (Dave)"
+    echo -e "    • Not for sale"
+    echo -e "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 fi
 
 echo ""
@@ -169,13 +213,14 @@ echo ""
 echo -e "${BLUE}📊 Summary:${NC}"
 echo -e "  Contract ID: ${YELLOW}${CONTRACT_ID}${NC}"
 echo -e "  Network: ${YELLOW}Stellar Testnet${NC}"
-echo -e "  Queue Size: ${YELLOW}$(stellar contract invoke --id $CONTRACT_ID --source alice --network testnet -- get_next_token_id 2>&1 | grep -o '"[0-9]*"' | tr -d '"')${NC}"
+FINAL_QUEUE_COUNT=$(stellar contract invoke --id $CONTRACT_ID --source alice --network testnet -- get_queue_count 2>&1 | tail -1)
+echo -e "  Total Queues: ${YELLOW}${FINAL_QUEUE_COUNT}${NC}"
 echo ""
 echo -e "${BLUE}🚀 Next Steps:${NC}"
 echo -e "  1. cd /home/lkilic/StellarChallenge/frontend"
 echo -e "  2. npm run dev"
 echo -e "  3. Open ${YELLOW}http://localhost:3000${NC}"
-echo -e "  4. ${GREEN}Start your demo!${NC}"
+echo -e "  4. ${GREEN}Explore multiple queues!${NC}"
 echo ""
 echo -e "${BLUE}📌 Contract Explorer:${NC}"
 echo -e "  https://stellar.expert/explorer/testnet/contract/${CONTRACT_ID}"
@@ -183,4 +228,3 @@ echo ""
 echo -e "${BLUE}💾 Backup:${NC}"
 echo -e "  Old config saved to: ${FRONTEND_CONFIG}.backup"
 echo ""
-
