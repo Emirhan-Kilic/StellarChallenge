@@ -1,5 +1,5 @@
-#Use this for demo only, no need for setup_demo.sh etc, only reset_queue.sh is designed to
-# create the fully proper environment
+#Use this for demo only, no need for setup_demo.sh etc, reset_queue.sh is specifically designed to
+#create the fully ready environment
 
 # 1. Complete reset with demo data
 cd /home/lkilic/StellarChallenge
