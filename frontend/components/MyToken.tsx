@@ -21,6 +21,7 @@ export default function MyToken({
   const [myTokens, setMyTokens] = useState<QueueToken[]>([]);
   const [queues, setQueues] = useState<QueueInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [listing, setListing] = useState<string | null>(null); // "queueId-tokenId"
   const [canceling, setCanceling] = useState<string | null>(null); // "queueId-tokenId"
   const [prices, setPrices] = useState<Record<string, string>>({});
@@ -45,7 +46,11 @@ export default function MyToken({
   }, [isAutoRefreshing, refreshInterval]);
 
   async function loadMyTokens() {
-    setLoading(true);
+    // Only show loading spinner on initial load
+    if (isInitialLoad) {
+      setLoading(true);
+    }
+    
     const [tokens, allQueues] = await Promise.all([
       getUserTokens(userAddress),
       getAllQueues()
@@ -53,7 +58,11 @@ export default function MyToken({
     setMyTokens(tokens);
     setQueues(allQueues);
     setLastUpdate(new Date());
-    setLoading(false);
+    
+    if (isInitialLoad) {
+      setLoading(false);
+      setIsInitialLoad(false);
+    }
   }
 
   function getTokenKey(queueId: number, tokenId: number): string {
@@ -154,7 +163,8 @@ export default function MyToken({
     return queues.find(q => q.queueId === queueId)?.name || `Queue #${queueId}`;
   }
 
-  if (loading) {
+  // Only show loading spinner on initial load (not on auto-refresh)
+  if (loading && myTokens.length === 0) {
     return (
       <div className="text-center py-8">
         <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent"></div>
@@ -162,7 +172,7 @@ export default function MyToken({
     );
   }
 
-  if (myTokens.length === 0) {
+  if (!loading && myTokens.length === 0) {
     return (
       <div className="text-center py-8 bg-gray-50 rounded-lg">
         <p className="text-gray-600">You don&apos;t have any queue tokens yet.</p>

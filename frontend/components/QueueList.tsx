@@ -21,12 +21,14 @@ export default function QueueList({
 }: QueueListProps) {
   const [tokens, setTokens] = useState<QueueToken[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [buying, setBuying] = useState<number | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(autoRefresh);
 
   useEffect(() => {
     if (queueId !== null) {
+      setIsInitialLoad(true); // Reset when queue changes
       loadQueue();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -47,11 +49,19 @@ export default function QueueList({
   async function loadQueue() {
     if (queueId === null) return;
     
-    setLoading(true);
+    // Only show loading spinner on initial load
+    if (isInitialLoad) {
+      setLoading(true);
+    }
+    
     const data = await getQueueData(queueId);
     setTokens(data);
     setLastUpdate(new Date());
-    setLoading(false);
+    
+    if (isInitialLoad) {
+      setLoading(false);
+      setIsInitialLoad(false);
+    }
   }
 
   function toggleAutoRefresh() {
@@ -114,7 +124,8 @@ export default function QueueList({
     );
   }
 
-  if (loading) {
+  // Only show loading spinner on initial load (not on auto-refresh)
+  if (loading && tokens.length === 0) {
     return (
       <div className="text-center py-8">
         <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent"></div>
@@ -123,7 +134,7 @@ export default function QueueList({
     );
   }
 
-  if (tokens.length === 0) {
+  if (!loading && tokens.length === 0) {
     return (
       <div className="text-center py-8 bg-gray-50 rounded-lg">
         <p className="text-gray-600">No one in the queue yet. Be the first to join!</p>
