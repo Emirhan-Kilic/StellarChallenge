@@ -6,6 +6,7 @@ import QueueSelector from "@/components/QueueSelector";
 import QueueList from "@/components/QueueList";
 import MyToken from "@/components/MyToken";
 import Verifier from "@/components/Verifier";
+import ActivityFeed from "@/components/ActivityFeed";
 import { buildJoinQueueTx, submitTransaction } from "@/lib/stellar";
 import { signTx } from "@/lib/freighter";
 
@@ -63,7 +64,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
@@ -104,60 +105,71 @@ export default function Home() {
               </button>
             </div>
 
-            {/* Tabs */}
-            <div className="bg-white rounded-t-lg shadow-md">
-              <div className="flex border-b border-gray-200">
-                <button
-                  onClick={() => setActiveTab("queue")}
-                  className={`flex-1 py-3 px-4 text-center font-medium transition ${
-                    activeTab === "queue"
-                      ? "border-b-2 border-blue-600 text-blue-600"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  📋 Queue List
-                </button>
-                <button
-                  onClick={() => setActiveTab("mytoken")}
-                  className={`flex-1 py-3 px-4 text-center font-medium transition ${
-                    activeTab === "mytoken"
-                      ? "border-b-2 border-blue-600 text-blue-600"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  🎟️ My Token
-                </button>
-                <button
-                  onClick={() => setActiveTab("verifier")}
-                  className={`flex-1 py-3 px-4 text-center font-medium transition ${
-                    activeTab === "verifier"
-                      ? "border-b-2 border-blue-600 text-blue-600"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  ✅ Verifier
-                </button>
-              </div>
-            </div>
+            {/* Two Column Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Main Content */}
+              <div className="lg:col-span-2">
+                {/* Tabs */}
+                <div className="bg-white rounded-t-lg shadow-md">
+                  <div className="flex border-b border-gray-200">
+                    <button
+                      onClick={() => setActiveTab("queue")}
+                      className={`flex-1 py-3 px-4 text-center font-medium transition ${
+                        activeTab === "queue"
+                          ? "border-b-2 border-blue-600 text-blue-600"
+                          : "text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      📋 Queue List
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("mytoken")}
+                      className={`flex-1 py-3 px-4 text-center font-medium transition ${
+                        activeTab === "mytoken"
+                          ? "border-b-2 border-blue-600 text-blue-600"
+                          : "text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      🎟️ My Token
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("verifier")}
+                      className={`flex-1 py-3 px-4 text-center font-medium transition ${
+                        activeTab === "verifier"
+                          ? "border-b-2 border-blue-600 text-blue-600"
+                          : "text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      ✅ Verifier
+                    </button>
+                  </div>
+                </div>
 
-            {/* Tab Content */}
-            <div className="bg-white rounded-b-lg shadow-md p-6">
-              {activeTab === "queue" && (
-                <QueueList
-                  key={refreshKey}
-                  userAddress={userAddress}
-                  queueId={selectedQueueId}
-                  onRefresh={handleRefresh}
-                />
-              )}
-              {activeTab === "mytoken" && (
-                <MyToken
-                  key={refreshKey}
-                  userAddress={userAddress}
-                  onUpdate={handleRefresh}
-                />
-              )}
-              {activeTab === "verifier" && <Verifier />}
+                {/* Tab Content */}
+                <div className="bg-white rounded-b-lg shadow-md p-6">
+                  {activeTab === "queue" && (
+                    <QueueList
+                      key={refreshKey}
+                      userAddress={userAddress}
+                      queueId={selectedQueueId}
+                      onRefresh={handleRefresh}
+                    />
+                  )}
+                  {activeTab === "mytoken" && (
+                    <MyToken
+                      key={refreshKey}
+                      userAddress={userAddress}
+                      onUpdate={handleRefresh}
+                    />
+                  )}
+                  {activeTab === "verifier" && <Verifier />}
+                </div>
+              </div>
+
+              {/* Activity Feed */}
+              <div className="lg:col-span-1">
+                <ActivityFeed autoRefresh={true} refreshInterval={5000} />
+              </div>
             </div>
           </>
         )}

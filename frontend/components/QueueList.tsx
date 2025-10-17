@@ -8,12 +8,22 @@ interface QueueListProps {
   userAddress: string | null;
   queueId: number | null;
   onRefresh?: () => void;
+  autoRefresh?: boolean;
+  refreshInterval?: number;
 }
 
-export default function QueueList({ userAddress, queueId, onRefresh }: QueueListProps) {
+export default function QueueList({ 
+  userAddress, 
+  queueId, 
+  onRefresh,
+  autoRefresh = true,
+  refreshInterval = 10000
+}: QueueListProps) {
   const [tokens, setTokens] = useState<QueueToken[]>([]);
   const [loading, setLoading] = useState(true);
   const [buying, setBuying] = useState<number | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [isAutoRefreshing, setIsAutoRefreshing] = useState(autoRefresh);
 
   useEffect(() => {
     if (queueId !== null) {
@@ -22,13 +32,37 @@ export default function QueueList({ userAddress, queueId, onRefresh }: QueueList
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queueId]);
 
+  // Auto-refresh effect
+  useEffect(() => {
+    if (!isAutoRefreshing || queueId === null) return;
+
+    const interval = setInterval(() => {
+      loadQueue();
+    }, refreshInterval);
+
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAutoRefreshing, queueId, refreshInterval]);
+
   async function loadQueue() {
     if (queueId === null) return;
     
     setLoading(true);
     const data = await getQueueData(queueId);
     setTokens(data);
+    setLastUpdate(new Date());
     setLoading(false);
+  }
+
+  function toggleAutoRefresh() {
+    setIsAutoRefreshing(!isAutoRefreshing);
+  }
+
+  function getTimeSinceUpdate(): string {
+    const seconds = Math.floor((Date.now() - lastUpdate.getTime()) / 1000);
+    if (seconds < 10) return "just now";
+    if (seconds < 60) return `${seconds}s ago`;
+    return `${Math.floor(seconds / 60)}m ago`;
   }
 
   async function handleBuy(tokenId: number) {
@@ -100,13 +134,43 @@ export default function QueueList({ userAddress, queueId, onRefresh }: QueueList
   return (
     <div className="space-y-3">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">Queue ({tokens.length} positions)</h3>
-        <button
-          onClick={loadQueue}
-          className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-        >
-          🔄 Refresh
-        </button>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">
+            Queue ({tokens.length} positions)
+          </h3>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-xs text-gray-500">
+              Updated {getTimeSinceUpdate()}
+            </span>
+            {isAutoRefreshing && (
+              <span className="flex items-center gap-1 text-xs text-green-600">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+                Live
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleAutoRefresh}
+            className={`px-3 py-1 text-xs rounded-lg font-medium transition ${
+              isAutoRefreshing
+                ? "bg-green-100 text-green-700 hover:bg-green-200"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            {isAutoRefreshing ? "⏸ Pause" : "▶ Auto"}
+          </button>
+          <button
+            onClick={loadQueue}
+            className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 font-medium transition"
+          >
+            🔄 Refresh
+          </button>
+        </div>
       </div>
 
       {tokens.map((token) => (
