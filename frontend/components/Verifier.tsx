@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { getOwnerOf } from "@/lib/stellar";
 
@@ -13,9 +13,11 @@ export default function Verifier() {
   } | null>(null);
   const [error, setError] = useState("");
   const [manualMode, setManualMode] = useState(true);
+  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
 
-  async function handleVerify() {
-    if (!tokenId || isNaN(parseInt(tokenId))) {
+  async function handleVerify(idToVerify?: string) {
+    const id = idToVerify || tokenId;
+    if (!id || isNaN(parseInt(id))) {
       setError("Please enter a valid token ID");
       return;
     }
@@ -24,27 +26,62 @@ export default function Verifier() {
     setVerificationResult(null);
 
     try {
-      const owner = await getOwnerOf(parseInt(tokenId));
+      const parsedId = parseInt(id.trim());
+      console.log("Verifying token ID:", parsedId);
+      
+      const owner = await getOwnerOf(parsedId);
       if (owner) {
         setVerificationResult({
-          tokenId: parseInt(tokenId),
+          tokenId: parsedId,
           owner,
         });
+        setError(""); // Clear any previous errors
       } else {
         setError("Token not found or does not exist");
       }
     } catch (err) {
+      console.error("Verification error:", err);
       setError("Verification failed: " + (err instanceof Error ? err.message : String(err)));
     }
   }
 
+  function handleKeyPress(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      handleVerify();
+    }
+  }
+
   async function startScanner() {
-    setScanning(true);
     setError("");
-    setManualMode(false);
     
     try {
+      // Clean up any existing scanner instance first
+      if (html5QrCodeRef.current) {
+        try {
+          await html5QrCodeRef.current.stop();
+        } catch {
+          // Ignore errors when stopping
+        }
+        html5QrCodeRef.current = null;
+      }
+
+      // Set manualMode to false to render the qr-reader div
+      setManualMode(false);
+      
+      // Wait for React to render the DOM element
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Verify the element exists
+      const element = document.getElementById("qr-reader");
+      if (!element) {
+        throw new Error("QR reader element not found after render");
+      }
+
+      setScanning(true);
+
+      // Create new scanner instance
       const html5QrCode = new Html5Qrcode("qr-reader");
+      html5QrCodeRef.current = html5QrCode;
       
       await html5QrCode.start(
         { facingMode: "environment" },
@@ -54,41 +91,49 @@ export default function Verifier() {
         },
         async (decodedText) => {
           // Stop scanning
-          await html5QrCode.stop();
-          setScanning(false);
-          
-          // Verify the scanned token
-          setTokenId(decodedText);
-          const owner = await getOwnerOf(parseInt(decodedText));
-          if (owner) {
-            setVerificationResult({
-              tokenId: parseInt(decodedText),
-              owner,
-            });
-          } else {
-            setError("Token not found");
+          try {
+            await html5QrCode.stop();
+            html5QrCodeRef.current = null;
+          } catch (stopErr) {
+            console.error("Error stopping scanner:", stopErr);
           }
+          
+          setScanning(false);
+          setManualMode(true);
+          
+          // Set token ID and verify
+          setTokenId(decodedText.trim());
+          console.log("QR Code scanned:", decodedText);
+          
+          // Automatically verify the scanned token
+          await handleVerify(decodedText.trim());
         },
         () => {
           // Ignore scan errors
         }
       );
     } catch (err) {
+      console.error("Failed to start scanner:", err);
       setError("Failed to start camera: " + (err instanceof Error ? err.message : String(err)));
       setScanning(false);
       setManualMode(true);
+      html5QrCodeRef.current = null;
     }
   }
 
   async function stopScanner() {
     try {
-      const html5QrCode = new Html5Qrcode("qr-reader");
-      await html5QrCode.stop();
+      if (html5QrCodeRef.current) {
+        await html5QrCodeRef.current.stop();
+        html5QrCodeRef.current = null;
+      }
       setScanning(false);
       setManualMode(true);
-    } catch {
+    } catch (err) {
+      console.error("Error stopping scanner:", err);
       setScanning(false);
       setManualMode(true);
+      html5QrCodeRef.current = null;
     }
   }
 
@@ -110,11 +155,12 @@ export default function Verifier() {
                 type="number"
                 value={tokenId}
                 onChange={(e) => setTokenId(e.target.value)}
+                onKeyPress={handleKeyPress}
                 placeholder="Enter token ID"
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <button
-                onClick={handleVerify}
+                onClick={() => handleVerify()}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
               >
                 Verify

@@ -1,7 +1,7 @@
 import * as StellarSdk from "@stellar/stellar-sdk";
 
 // Contract deployed on Testnet
-export const CONTRACT_ID = "CBLV6FQKHC6HB5QZCJ36WBFRD3F7RUWVWI3DSAPPOD67RICDPNOIYY6Y";
+export const CONTRACT_ID = "CAWE4YAL474UU4UKBKJPLFTLZLNBFIEILKEDKJPHF7JPRQ5OT7UG4NAM";
 export const NETWORK_PASSPHRASE = StellarSdk.Networks.TESTNET;
 export const RPC_URL = "https://soroban-testnet.stellar.org:443";
 
@@ -51,6 +51,9 @@ export async function buildListForSaleTx(
   const account = await server.getAccount(userAddress);
   const contract = new StellarSdk.Contract(CONTRACT_ID);
   
+  // Convert price string to BigInt for u128
+  const priceBigInt = BigInt(price);
+  
   const tx = new StellarSdk.TransactionBuilder(account, {
     fee: StellarSdk.BASE_FEE,
     networkPassphrase: NETWORK_PASSPHRASE,
@@ -59,7 +62,7 @@ export async function buildListForSaleTx(
       contract.call(
         "list_for_sale",
         StellarSdk.nativeToScVal(tokenId, { type: "u32" }),
-        StellarSdk.nativeToScVal(price, { type: "u128" })
+        StellarSdk.nativeToScVal(priceBigInt, { type: "u128" })
       )
     )
     .setTimeout(300)
@@ -259,12 +262,13 @@ export async function getQueueData(): Promise<QueueToken[]> {
   }
 }
 
-// Optimized: Find user's token without fetching entire queue
-export async function getUserToken(userAddress: string): Promise<QueueToken | null> {
+// Optimized: Find ALL user's tokens without fetching entire queue
+export async function getUserTokens(userAddress: string): Promise<QueueToken[]> {
   try {
     const totalTokens = await getNextTokenId();
+    const userTokens: QueueToken[] = [];
     
-    // Check tokens in parallel batches to avoid overwhelming RPC
+    // Check all tokens in parallel batches
     const batchSize = 10;
     for (let start = 0; start < totalTokens; start += batchSize) {
       const end = Math.min(start + batchSize, totalTokens);
@@ -272,25 +276,34 @@ export async function getUserToken(userAddress: string): Promise<QueueToken | nu
       
       const owners = await Promise.all(batch.map(i => getOwnerOf(i)));
       
-      // Check if user owns any token in this batch
-      const userTokenIndex = owners.findIndex(owner => owner === userAddress);
-      if (userTokenIndex !== -1) {
-        const tokenId = start + userTokenIndex;
-        const price = await getPrice(tokenId);
+      // Find all tokens owned by user in this batch
+      const userTokenIds = batch.filter((tokenId, index) => owners[index] === userAddress);
+      
+      // Get prices for user's tokens
+      if (userTokenIds.length > 0) {
+        const prices = await Promise.all(userTokenIds.map(id => getPrice(id)));
         
-        return {
-          tokenId,
-          owner: userAddress,
-          price: price || "0",
-          isForSale: price !== "0" && price !== null,
-        };
+        userTokenIds.forEach((tokenId, index) => {
+          userTokens.push({
+            tokenId,
+            owner: userAddress,
+            price: prices[index] || "0",
+            isForSale: prices[index] !== "0" && prices[index] !== null,
+          });
+        });
       }
     }
     
-    return null;
+    return userTokens;
   } catch (err) {
-    console.error("Error getting user token:", err);
-    return null;
+    console.error("Error getting user tokens:", err);
+    return [];
   }
+}
+
+// Backward compatibility: Get user's first token
+export async function getUserToken(userAddress: string): Promise<QueueToken | null> {
+  const tokens = await getUserTokens(userAddress);
+  return tokens.length > 0 ? tokens[0] : null;
 }
 
