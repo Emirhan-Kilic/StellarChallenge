@@ -1,10 +1,15 @@
 <div align="center">
 
 
+# Try the Demo Yourself, Live 🎮 
+
+
+https://stellar-challenge.vercel.app/
+
+
+
+
 # Demo Video 📸
-
-
-
 
 https://github.com/user-attachments/assets/3a866ff2-a9b6-4143-977a-b95ce62dfd84
 
