@@ -7,7 +7,7 @@ import QueueList from "@/components/QueueList";
 import MyToken from "@/components/MyToken";
 import Verifier from "@/components/Verifier";
 import ActivityFeed from "@/components/ActivityFeed";
-import { buildJoinQueueTx, submitTransaction } from "@/lib/stellar";
+import { buildJoinQueueTx, submitTransaction, CONTRACT_ID } from "@/lib/stellar";
 import { signTx } from "@/lib/freighter";
 
 export default function Home() {
@@ -194,7 +194,7 @@ export default function Home() {
           <p className="mt-1">
             Contract:{" "}
             <code className="bg-gray-100 px-2 py-1 rounded text-xs">
-              CB4KYG6XSUXNCTEX7APZ4R3ATJG3XKD7GGCT3EWFESWRCGAX734EQR45
+              {CONTRACT_ID}
             </code>
           </p>
         </div>
